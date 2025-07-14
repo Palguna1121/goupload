@@ -256,6 +256,16 @@ func (u *ImageUploader) validateFile(file *multipart.FileHeader, maxSize int64) 
 			file.Filename, strings.Join(u.config.AllowedExtensions, ", "))
 	}
 
+	// Check MIME type
+	mime, err := u.detectMimeType(file)
+	if err != nil {
+		return fmt.Errorf("failed to read MIME type for %s: %v", file.Filename, err)
+	}
+
+	if !u.isAllowedMimeType(mime) {
+		return fmt.Errorf("file %s has disallowed MIME type: %s", file.Filename, mime)
+	}
+
 	return nil
 }
 
@@ -319,4 +329,37 @@ func (u *ImageUploader) formatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func (u *ImageUploader) detectMimeType(file *multipart.FileHeader) (string, error) {
+	f, err := file.Open()
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	buffer := make([]byte, 512)
+	_, err = f.Read(buffer)
+	if err != nil {
+		return "", err
+	}
+
+	return http.DetectContentType(buffer), nil
+}
+
+func (u *ImageUploader) isAllowedMimeType(mime string) bool {
+	allowedMimes := []string{
+		"image/jpeg",
+		"image/png",
+		"image/webp",
+		"image/gif",
+		"image/bmp",
+		"image/svg+xml",
+	}
+	for _, allowed := range allowedMimes {
+		if mime == allowed {
+			return true
+		}
+	}
+	return false
 }
